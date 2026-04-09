@@ -1,0 +1,103 @@
+document.addEventListener('DOMContentLoaded', function() {
+    const preloader = document.createElement('div');
+    preloader.id = 'preloader';
+    preloader.setAttribute("aria-hidden", "true");
+    preloader.innerHTML = `
+        <div>
+            <h1 class="uagb-heading-text"><img style="max-width: 260px;" src="./Inicio - Cumple de Luna_files/Recurso-48-min.png"></h1>
+            <p class="uagb-desc-text">Preparando la magia...</p>
+        </div>
+    `;
+    document.body.insertBefore(preloader, document.body.firstChild);
+
+    // Solo bloqueamos el scroll en lugar de reescribir todos los estilos
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    const style = document.createElement('style');
+    style.innerHTML = `
+        #preloader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            background-image: url('https://blue-4.magentadesignss.com/wp-content/uploads/sites/20/2025/11/bg-page.jpg');
+            background-repeat: no-repeat;
+            background-size: cover;
+            background-position: center;
+            background-color: #60007F; /* fallback por accesibilidad */
+        }
+        #preloader h1,
+        #preloader p {
+            color: #fff;
+        }
+        #preloader p {
+            text-align: center;
+            margin-top: 0;
+            font-weight: 500;
+        }
+        .audio-controls {
+            display: none;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Ocultar controles de audio al inicio
+    const audioControls = document.querySelector('.audio-controls');
+    if (audioControls) {
+        audioControls.style.display = 'none';
+    }
+});
+
+window.addEventListener('load', function() {
+    setTimeout(function() {
+        const preloader = document.getElementById('preloader');
+        if (preloader) {
+            preloader.remove();
+        }
+
+        // Restaurar scroll en lugar de limpiar todos los estilos
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+
+        // Mostrar controles de audio si existen
+        const audioControls = document.querySelector('.audio-controls');
+        if (audioControls) {
+            audioControls.style.display = 'flex';
+        }
+
+        // Refrescar ScrollTrigger solo si está disponible
+        if (typeof ScrollTrigger !== "undefined") {
+            ScrollTrigger.refresh();
+        }
+
+        // Animar elementos visibles con GSAP solo si está disponible
+        if (typeof gsap !== "undefined") {
+            document.querySelectorAll(".animate-on-scroll").forEach(function(elem) {
+                const rect = elem.getBoundingClientRect();
+                if (rect.top < window.innerHeight) {
+                    let config = {};
+                    if (elem.classList.contains("fade-up"))   config = { y: 60,  opacity: 0 };
+                    if (elem.classList.contains("fade-down")) config = { y: -60, opacity: 0 };
+                    if (elem.classList.contains("fade-left")) config = { x: -60, opacity: 0 };
+                    if (elem.classList.contains("fade-right"))config = { x: 60,  opacity: 0 };
+                    if (elem.classList.contains("zoom-in"))   config = { scale: 0.8, opacity: 0 };
+                    if (elem.classList.contains("zoom-out"))  config = { scale: 1.2, opacity: 0 };
+                    if (elem.classList.contains("rotate-in")) config = { rotation: -45, opacity: 0 };
+
+                    gsap.from(elem, {
+                        ...config,
+                        duration: elem.dataset.duration ? parseFloat(elem.dataset.duration) : 1.2,
+                        delay: elem.dataset.delay ? parseFloat(elem.dataset.delay) : 0,
+                        ease: "power3.out"
+                    });
+                }
+            });
+        }
+    }, 300); // se puede ajustar (300ms es seguro sin retrasar mucho)
+});

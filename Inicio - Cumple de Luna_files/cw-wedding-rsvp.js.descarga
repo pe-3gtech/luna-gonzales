@@ -1,0 +1,131 @@
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('cw-rsvp-form');
+    if (!form) {
+        return;
+    }
+
+    const submitButton = form.querySelector('input[type="submit"]');
+    const successMessage = document.getElementById('rsvp-success');
+    const errorMessage = document.querySelector('.error-message');
+    const otroRegistroDiv = document.getElementById('otro-registro-div');
+    const otroRegistroBtn = document.getElementById('otroRegistroBtn');
+    const container = document.querySelector('.cw-rsvp-form-container');
+    const acompananteDiv = document.getElementById('cw_rsvp_acompanante_content');
+    const acompananteSelect = document.getElementById('cw_rsvp_acompanante');
+    const companionRows = acompananteDiv ? acompananteDiv.querySelectorAll('.cw-rsvp-acompanante-row') : [];
+
+    // Inicializa la visibilidad del contenido del acompañante
+    function toggleAcompananteFields() {
+        const selectedCompanions = parseInt(acompananteSelect.value, 10) || 0;
+
+        if (selectedCompanions > 0) {
+            acompananteDiv.style.display = 'flex';
+            acompananteDiv.style.flexDirection = 'column';
+        } else {
+            acompananteDiv.style.display = 'none';
+        }
+
+        companionRows.forEach((row, index) => {
+            const isVisible = index < selectedCompanions;
+            row.style.display = isVisible ? 'flex' : 'none';
+
+            row.querySelectorAll('input').forEach((input) => {
+                input.required = isVisible;
+
+                if (!isVisible) {
+                    input.value = '';
+                }
+            });
+        });
+    }
+
+    acompananteSelect.addEventListener('change', toggleAcompananteFields);
+    toggleAcompananteFields(); // Inicializa al cargar la página
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        // Desactivar el botón de enviar
+        submitButton.disabled = true;
+
+        const formData = new FormData();
+        formData.append('action', 'cw_process_rsvp_form');
+        formData.append('first_name', document.getElementById('cw_rsvp_first_name').value);
+        formData.append('last_name', document.getElementById('cw_rsvp_last_name').value);
+        formData.append('email', document.getElementById('cw_rsvp_email').value);
+        formData.append('phone', document.getElementById('cw_rsvp_phone').value);
+        formData.append('asistencia', document.getElementById('cw_rsvp_asistencia').value);
+        formData.append('acompanante', acompananteSelect.value);
+
+        companionRows.forEach((row, index) => {
+            const firstNameInput = row.querySelector('[data-acompanante-field="first_name"]');
+            const lastNameInput = row.querySelector('[data-acompanante-field="last_name"]');
+
+            formData.append(`companions[${index}][first_name]`, firstNameInput ? firstNameInput.value : '');
+            formData.append(`companions[${index}][last_name]`, lastNameInput ? lastNameInput.value : '');
+        });
+
+        // Verifica si los elementos de menú existen antes de agregar sus valores
+        const entrada = document.getElementsByName('cw_rsvp_entrada');
+        const principal = document.getElementsByName('cw_rsvp_principal');
+        const postre = document.getElementsByName('cw_rsvp_postre');
+        formData.append('entrada', entrada.length > 0 ? getCheckedValue(entrada) : '');
+        formData.append('principal', principal.length > 0 ? getCheckedValue(principal) : '');
+        formData.append('postre', postre.length > 0 ? getCheckedValue(postre) : '');
+
+        // Verifica si el campo de alergias existe antes de agregar su valor
+        const alergia = document.getElementById('cw_rsvp_alergia');
+        formData.append('alergia', alergia ? alergia.value : '');
+
+        try {
+            const response = await fetch('/wp-admin/admin-ajax.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const responseData = await response.json();
+
+            if (responseData.success) {
+                form.style.display = 'none';
+                successMessage.style.display = 'block';
+                successMessage.textContent = '¡Formulario enviado con éxito!';
+                errorMessage.style.display = 'none';
+
+                otroRegistroDiv.style.display = 'block';
+                otroRegistroBtn.style.display = 'block';
+                container.scrollIntoView();
+                form.reset();
+                toggleAcompananteFields(); // Reset visibility of acompanante fields
+            } else {
+                errorMessage.textContent = responseData.message || 'Hubo un problema al enviar el formulario.';
+                errorMessage.style.display = 'block';
+                successMessage.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error al enviar el formulario RSVP:', error);
+            errorMessage.textContent = 'Error al enviar el formulario. Por favor, intenta nuevamente.';
+            errorMessage.style.display = 'block';
+            successMessage.style.display = 'none';
+        } finally {
+            // Reactivar el botón de enviar
+            submitButton.disabled = false;
+        }
+    });
+
+    function getCheckedValue(radioButtons) {
+        for (let i = 0; i < radioButtons.length; i++) {
+            if (radioButtons[i].checked) {
+                return radioButtons[i].value;
+            }
+        }
+        return null;
+    }
+
+    otroRegistroBtn.addEventListener('click', function() {
+        successMessage.style.display = 'none';
+        form.style.display = 'block';
+        container.scrollIntoView();
+        otroRegistroDiv.style.display = 'none';
+        otroRegistroBtn.style.display = 'none';
+    });
+});
