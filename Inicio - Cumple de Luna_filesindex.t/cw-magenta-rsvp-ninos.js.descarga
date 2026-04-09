@@ -1,0 +1,148 @@
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('cw-magenta-rsvp-ninos-form');
+    const submitButton = form.querySelector('input[type="submit"]');
+    const successMessage = document.getElementById('rsvp-success');
+    const errorMessage = document.querySelector('.error-message');
+    const otroRegistroDiv = document.getElementById('otro-registro-div');
+    const otroRegistroBtn = document.getElementById('otroRegistroBtn');
+    const container = document.querySelector('.cw-magenta-rsvp-ninos-form-container');
+    const acompananteDiv = document.getElementById('cw_magenta_rsvp_ninos_acompanante_content');
+    const acompananteSelect = document.getElementById('cw_magenta_rsvp_ninos_acompanante');
+    // Campos ocultos antispam
+    const hpInput = document.getElementById('cw_hp_field');
+    const loadInput = document.getElementById('cw_load_time');
+    const challengeInput = document.getElementById('cw_js_challenge');
+    const nonceInput = document.querySelector('input[name="cw_rsvp_ninos_nonce"]');
+
+    // Inicializa la visibilidad del contenido del acompañante
+    function toggleAcompananteFields() {
+        if (acompananteSelect.value === '1') {
+            acompananteDiv.style.display = 'flex';
+        } else {
+            acompananteDiv.style.display = 'none';
+        }
+    }
+
+    acompananteSelect.addEventListener('change', toggleAcompananteFields);
+    toggleAcompananteFields(); // Inicializa al cargar la página
+
+    // Inicializa el reto JS (requiere que el navegador ejecute JS)
+    try {
+        if (challengeInput && loadInput) {
+            const uaLen = (navigator.userAgent || '').length;
+            const tz = new Date().getTimezoneOffset();
+            challengeInput.value = btoa(`${loadInput.value}:${uaLen}:${tz}`);
+        }
+    } catch (e) {
+        // Si falla, deja el valor vacío; el servidor rechazará la petición
+        if (challengeInput) challengeInput.value = '';
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        // Desactivar el botón de enviar
+        submitButton.disabled = true;
+
+        const formData = new FormData();
+        formData.append('action', 'cw_ninos_process_rsvp_form');
+        formData.append('first_name', document.getElementById('cw_magenta_rsvp_ninos_first_name').value);
+        formData.append('last_name', document.getElementById('cw_magenta_rsvp_ninos_last_name').value);
+        formData.append('acompanante_first_name', document.getElementById('cw_magenta_rsvp_ninos_acompanante_first_name').value);
+        formData.append('acompanante_last_name', document.getElementById('cw_magenta_rsvp_ninos_acompanante_last_name').value);
+        formData.append('acompanante_email', document.getElementById('cw_magenta_rsvp_ninos_acompanante_email').value);
+        formData.append('acompanante_phone', document.getElementById('cw_magenta_rsvp_ninos_acompanante_phone').value);
+        formData.append('asistencia', document.getElementById('cw_magenta_rsvp_ninos_asistencia').value);
+        formData.append('acompanante', acompananteSelect.value);
+
+        // Verifica si los campos de acompañante existen antes de agregar sus valores
+        const firstNameAcompanante = document.getElementById('cw_magenta_rsvp_ninos_first_name_acompanante');
+        const lastNameAcompanante = document.getElementById('cw_magenta_rsvp_ninos_last_name_acompanante');
+        formData.append('first_name_acompanante', firstNameAcompanante ? firstNameAcompanante.value : '');
+        formData.append('last_name_acompanante', lastNameAcompanante ? lastNameAcompanante.value : '');
+
+        // Verifica si los elementos de menú existen antes de agregar sus valores
+        const entrada = document.getElementsByName('cw_magenta_rsvp_ninos_entrada');
+        const principal = document.getElementsByName('cw_magenta_rsvp_ninos_principal');
+        const postre = document.getElementsByName('cw_magenta_rsvp_ninos_postre');
+        formData.append('entrada', entrada.length > 0 ? getCheckedValue(entrada) : '');
+        formData.append('principal', principal.length > 0 ? getCheckedValue(principal) : '');
+        formData.append('postre', postre.length > 0 ? getCheckedValue(postre) : '');
+
+        // Verifica si el campo de alergias existe antes de agregar su valor
+        const alergia = document.getElementById('cw_magenta_rsvp_ninos_alergia');
+        formData.append('alergia', alergia ? alergia.value : '');
+
+        // Añadir campos ocultos antispam y nonce
+        formData.append('cw_hp_field', hpInput ? hpInput.value : '');
+        formData.append('cw_load_time', loadInput ? loadInput.value : '');
+        formData.append('cw_js_challenge', challengeInput ? challengeInput.value : '');
+        formData.append('cw_rsvp_ninos_nonce', nonceInput ? nonceInput.value : '');
+
+        try {
+            const response = await fetch(window.location.origin + '/wp-admin/admin-ajax.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            // Verificar si la respuesta es válida
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const responseText = await response.text();
+            // console.log('Respuesta del servidor:', responseText);
+
+            let responseData;
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Error al parsear JSON:', parseError);
+                console.error('Respuesta recibida:', responseText);
+                throw new Error('La respuesta del servidor no es JSON válido');
+            }
+
+            if (responseData.success) {
+                form.style.display = 'none';
+                successMessage.style.display = 'block';
+                successMessage.textContent = '¡Formulario enviado con éxito!';
+                errorMessage.style.display = 'none';
+
+                otroRegistroDiv.style.display = 'block';
+                otroRegistroBtn.style.display = 'block';
+                container.scrollIntoView();
+                form.reset();
+                toggleAcompananteFields(); // Reset visibility of acompanante fields
+            } else {
+                errorMessage.textContent = responseData.message || 'Hubo un problema al enviar el formulario.';
+                errorMessage.style.display = 'block';
+                successMessage.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error al enviar el formulario RSVP:', error);
+            errorMessage.textContent = 'Error al enviar el formulario. Por favor, intenta nuevamente.';
+            errorMessage.style.display = 'block';
+            successMessage.style.display = 'none';
+        } finally {
+            // Reactivar el botón de enviar
+            submitButton.disabled = false;
+        }
+    });
+
+    function getCheckedValue(radioButtons) {
+        for (let i = 0; i < radioButtons.length; i++) {
+            if (radioButtons[i].checked) {
+                return radioButtons[i].value;
+            }
+        }
+        return null;
+    }
+
+    otroRegistroBtn.addEventListener('click', function() {
+        successMessage.style.display = 'none';
+        form.style.display = 'block';
+        container.scrollIntoView();
+        otroRegistroDiv.style.display = 'none';
+        otroRegistroBtn.style.display = 'none';
+    });
+});

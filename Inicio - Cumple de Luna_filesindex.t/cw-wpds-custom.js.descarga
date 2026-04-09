@@ -1,0 +1,180 @@
+document.addEventListener('DOMContentLoaded', function() {
+    var canvas = document.querySelector("canvas");
+    var signaturePad = new SignaturePad(canvas);
+    var loader = document.getElementById('wpds-loader');
+    var loader2 = document.getElementById('wpds-loader-2');
+    var iframe = document.getElementById('document-iframe');
+    var downloadButton = document.getElementById('download-document');
+    var documentViewer = document.getElementById('wpds-document-viewer');
+    var errorMessage = document.getElementById('wpds-error-message');
+    var signaturePadDiv = document.getElementById('wpds-signature-pad');
+    var toggleSignaturePadButton = document.getElementById('toggle-signature-pad');
+    var saveSignatureButton = document.getElementById('save-signature');
+    var clearSignatureButton = document.getElementById('clear-signature');
+
+    var overlay = document.createElement('div');
+    overlay.id = 'wpds-overlay';
+    document.body.appendChild(overlay);
+
+    function showLoader() {
+        overlay.style.display = 'block';
+        loader.style.display = 'block';
+    }
+
+    function hideLoader() {
+        overlay.style.display = 'none';
+        loader.style.display = 'none';
+    }
+
+    function showLoader2() {
+        overlay.style.display = 'block';
+        loader2.style.display = 'block';
+    }
+
+    function hideLoader2() {
+        overlay.style.display = 'none';
+        loader2.style.display = 'none';
+    }
+
+    function updateIframe(src) {
+        iframe.src = src;
+        updateDownloadLink(src);
+        iframe.onload = function() {
+            hideLoader();
+        }
+    }
+
+    function updateDownloadLink(src) {
+        var fileId = getFileIdFromUrl(src);
+        var downloadLink = 'https://drive.google.com/uc?export=download&id=' + fileId;
+        downloadButton.setAttribute('href', downloadLink);
+        downloadButton.style.display = 'block';
+    }
+
+    function getFileIdFromUrl(url) {
+        var match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : null;
+    }
+
+    function clearFormFields() {
+        var form = document.getElementById('wpds-form');
+        form.reset();
+    }
+
+    function adjustCanvasSize() {
+        var rect = signaturePadDiv.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        signaturePad.clear();
+    }
+
+    adjustCanvasSize();
+    window.addEventListener('resize', adjustCanvasSize);
+
+    // jQuery('#date').datepicker({
+    //     dateFormat: 'd-m-yy',
+    //     changeMonth: true,
+    //     changeYear: true
+    // });
+
+    toggleSignaturePadButton.addEventListener('click', function() {
+        if (signaturePadDiv.style.display === 'none' || signaturePadDiv.style.display === '') {
+            signaturePadDiv.style.display = 'block';
+            adjustCanvasSize();
+        } else {
+            signaturePadDiv.style.display = 'none';
+        }
+    });
+
+    document.getElementById('wpds-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var formData = new FormData(this);
+        formData.append('action', 'wpds_search_document');
+
+        documentViewer.style.display = 'none';
+        signaturePadDiv.style.display = 'none';
+        errorMessage.style.display = 'none';
+
+        clearFormFields();
+        showLoader();
+
+        fetch(wpds_ajax_object.ajax_url, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+
+                updateIframe(data.data.url);
+                documentViewer.style.display = 'block';
+                errorMessage.style.display = 'none';
+
+                var originalFileName = data.data.originalFileName;
+
+                if (!data.data.signed && originalFileName.includes('_pagado') || !data.data.signed && originalFileName.includes('_colab')) {
+                    toggleSignaturePadButton.style.display = 'block';
+                    saveSignatureButton.style.display = 'block';
+                    clearSignatureButton.style.display = 'block';
+
+                    saveSignatureButton.addEventListener('click', function() {
+                        var signatureData = signaturePad.toDataURL('image/png');
+                        var signFormData = new FormData();
+                        signFormData.append('action', 'wpds_sign_document');
+                        signFormData.append('fileId', data.data.fileId);
+                        signFormData.append('signature', signatureData);
+                        signFormData.append('originalFileName', originalFileName);
+
+                        showLoader2();
+
+                        fetch(wpds_ajax_object.ajax_url, {
+                            method: 'POST',
+                            body: signFormData
+                        })
+                        .then(response => response.json())
+                        .then(signData => {
+                            if (signData.success) {
+                                setTimeout(function() {
+                                    updateIframe(signData.data.url);
+                                    updateDownloadLink(signData.data.url);
+                                }, 5000);
+                                signaturePadDiv.style.display = 'none';
+                                errorMessage.style.display = 'none';
+                                toggleSignaturePadButton.style.display = 'none';
+                                hideLoader2();
+                            } else {
+                                errorMessage.textContent = 'Error al firmar el documento: ' + (signData.data.error || 'Unknown error');
+                                errorMessage.style.display = 'block';
+                                hideLoader2();
+                            }
+                        })
+                        .catch(error => {
+                            errorMessage.textContent = 'Ocurrió un error inesperado al firmar el documento.';
+                            errorMessage.style.display = 'block';
+                            hideLoader2();
+                        });
+                    });
+
+                    clearSignatureButton.addEventListener('click', function() {
+                        signaturePad.clear();
+                    });
+                } else {
+                    signaturePadDiv.style.display = 'none';
+                    saveSignatureButton.style.display = 'none';
+                    clearSignatureButton.style.display = 'none';
+                    toggleSignaturePadButton.style.display = 'none';
+                    updateDownloadLink(data.data.url);
+                }
+            } else {
+                errorMessage.textContent = data.data;
+                errorMessage.style.display = 'block';
+                hideLoader();
+            }
+        })
+        .catch(error => {
+            errorMessage.textContent = 'Ocurrió un error inesperado. Inténtalo de nuevo.';
+            errorMessage.style.display = 'block';
+            hideLoader();
+        });
+    });
+});
